@@ -1,0 +1,64 @@
+##How to make the data ready for market basket anlaysys
+#http://snowplowanalytics.com/analytics/catalog-analytics/market-basket-analysis-identifying-products-that-sell-well-together.html
+#http://www.salemmarafi.com/code/market-basket-analysis-with-r/comment-page-1/
+
+#instll package arules
+library(arules)
+library(datasets)
+library(arulesViz)
+
+#if the dataset is in the form transaction id+items
+MarkBask_Sample =read.csv("F:/Praxis/S03/R_Codes/DataSets/RetailData_Sample.csv")
+View(MarkBask_Sample)
+MarkBask_Modified <- split(MarkBask_Sample$Item, MarkBask_Sample$TransID)
+transactions =as(MarkBask_Modified, "transactions")
+
+
+# Load the preloaded data set
+data(Groceries)
+class(Groceries) #[1] "transactions" attr(,"package") [1] "arules"
+
+
+#if csv is directly available
+transactions1= read.csv("F:/Praxis/S03/R_Codes/DataSets/groceries.csv")
+#View(transactions1)
+data(transactions1)
+class(transactions1) #dataframe => has to convert to arules/transactions form
+transactions1 =as(transactions1, "transactions")
+
+
+#generating rules
+rules <- apriori(Groceries, parameter = list(supp = 0.001, conf = 0.8,maxlen=3))
+rules <- apriori(transactions1, parameter = list(supp = 0.001, conf = 0.8,target='rules',maxlen=3))
+#minimum support to 0.001 & minimum confidence of 0.8 & we just need 3 products to bundle
+
+
+
+##Removing redundancies
+subset.matrix <- is.subset(rules, rules)
+subset.matrix[lower.tri(subset.matrix, diag=T)] <- NA
+redundant <- colSums(subset.matrix, na.rm=T) >= 1
+rules.pruned <- rules[!redundant]
+rules<-rules.pruned
+
+rules<-sort(rules, by="confidence", decreasing=TRUE) #sort the rules by the confedence
+inspect(rules[1:10])
+
+##inspecting OUTPUT
+#   lhs                                      rhs                support     confidence     lift
+#1  {citrus.fruit=kitchen towels}         => {margarine=}   0.001111474          1        2.501226
+
+
+#support =>fraction of transactions in our dataset that contain our itemset (citrus fruit+kitchen towels+margarine)
+#confidence => likelihood that it is true for a new transaction that contains the items on the LHS of the rule. (I.e. it is the probability that the transaction also contains the item(s) on the RHS.)
+#lift => 1 means LHS and RHS are independence -- gt 1 =>precense of the items on the LHS has increased the probability that the items on the right hand side will occur on this transaction.
+        # lt 1 => the presence of the items on the LHS make the probability that the items on the RHS will be part of the transaction lower.
+
+
+## targeting items
+#What are customers likely to buy before buying margarine
+rules<-apriori(data=transactions1, parameter=list(supp=0.001,conf = 0.08), 
+               appearance = list(default="lhs",rhs="margarine="),
+               control = list(verbose=F))
+rules<-sort(rules, decreasing=TRUE,by="confidence")
+inspect(rules[1:5])
